@@ -9,7 +9,6 @@ if status is-interactive
     set PATH $PATH ~/.cargo/bin/
 
     zoxide init fish | source
-    atuin init fish | source
 
     nvm -s use latest
 
