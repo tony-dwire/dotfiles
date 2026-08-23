@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    echo "Usage: vrip-ep 'Show Name' <season> [first_episode] [-y]"
+    echo ""
+    echo "Rips TV episodes from the DVD in /dev/sr0 into a Jellyfin layout:"
+    echo "  Show Name/Season 01/Show Name S01E01.mp4"
+    echo ""
+    echo "first_episode lets you continue a multi-disc set:"
+    echo "  vrip-ep 'Bluey' 1        # disk 1: episodes 1-26"
+    echo "  vrip-ep 'Bluey' 1 27     # disk 2: episodes 27-52"
+    echo ""
+    echo "Options:"
+    echo "  -y, --yes    Don't ask for confirmation before encoding"
+    echo ""
+    echo "Environment overrides:"
+    echo "  VRIP_DEV=/dev/sr0        device to read from"
+    echo "  VRIP_EP_MIN_SECS=120     ignore titles shorter than this (warnings, logos)"
+    echo "  VRIP_EP_TOL_SECS=90      titles within this many seconds of each other"
+    echo "                           are considered the same episode length"
+    exit 1
+}
+
+[ $# -ge 2 ] || usage
+
+show_name="$1"; shift
+season="$1"; shift
+first_ep=1
+auto_yes=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -y|--yes) auto_yes=1 ;;
+        -h|--help) usage ;;
+        *) first_ep="$1" ;;
+    esac
+    shift
+done
+
+dev="${VRIP_DEV:-/dev/sr0}"
+min_secs="${VRIP_EP_MIN_SECS:-120}"
+tol_secs="${VRIP_EP_TOL_SECS:-90}"
+
+echo "Scanning disc layout..."
+# Episode discs (like this Bluey one) carry: junk titles (FBI warnings, logos),
+# one giant "play all" title, and one title per episode. Episodes all run about
+# the same length, so keep the densest cluster of similar-length titles and
+# drop everything else.
+detected=$(lsdvd -x "$dev" 2>/dev/null | awk -v min="$min_secs" -v tol="$tol_secs" '
+    /^Title: / {
+        tn = $2; gsub(/,/, "", tn)
+        split($4, t, ":")
+        secs = t[1]*3600 + t[2]*60 + t[3]
+        if (secs >= min) { n++; dur[n] = secs; ttl[n] = tn + 0 }
+    }
+    END {
+        # sort by duration (n is small; insertion sort is fine)
+        for (i = 2; i <= n; i++) {
+            d = dur[i]; k = ttl[i]; j = i - 1
+            while (j >= 1 && dur[j] > d) { dur[j+1] = dur[j]; ttl[j+1] = ttl[j]; j-- }
+            dur[j+1] = d; ttl[j+1] = k
+        }
+        # densest window of durations = the episode length
+        best = 0
+        for (i = 1; i <= n; i++) {
+            cnt = 0
+            for (j = i; j <= n && dur[j] - dur[i] <= tol; j++) cnt++
+            if (cnt > best) { best = cnt; med = dur[int((i + j - 1) / 2)] }
+        }
+        if (best == 0) exit 1
+        # keep anything within +/-40% of the episode length (drops play-all)
+        for (i = 1; i <= n; i++)
+            if (dur[i] >= 0.6 * med && dur[i] <= 1.4 * med)
+                print ttl[i], dur[i]
+    }' | sort -n) || true
+
+if [ -z "${detected:-}" ]; then
+    echo "Error: No episode-like titles found. Is the right disc inserted?"
+    exit 1
+fi
+
+season_padded=$(printf '%02d' "$season")
+season_dir="${show_name}/Season ${season_padded}"
+total=$(wc -l <<< "$detected")
+
+echo "Detected $total episodes:"
+ep=$first_ep
+while read -r title secs; do
+    outfile=$(printf '%s S%02dE%02d.mp4' "$show_name" "$season" "$ep")
+    printf '  Title %2d (%4d min) -> %s/%s\n' "$title" "$(( ${secs%.*} / 60 ))" "$season_dir" "$outfile"
+    ep=$((ep + 1))
+done <<< "$detected"
+
+if [ "$auto_yes" -eq 0 ]; then
+    read -rp "Rip these $total episodes? [y/N] " answer
+    [[ "$answer" =~ ^[Yy]$ ]] || exit 0
+fi
+
+mkdir -p "$season_dir"
+
+# Read straight from the disc: libdvdnav follows the real playback path,
+# which sidesteps ARccOS-style protection (bogus sectors / fake angles)
+# that breaks full-disc mirroring with dvdbackup.
+ep=$first_ep
+fails=0
+while read -r title secs; do
+    outfile=$(printf '%s S%02dE%02d.mp4' "$show_name" "$season" "$ep")
+    outpath="${season_dir}/${outfile}"
+    if [ -s "$outpath" ]; then
+        echo "[S${season_padded}E$(printf '%02d' "$ep")] exists, skipping."
+        ep=$((ep + 1)); continue
+    fi
+    echo "[S${season_padded}E$(printf '%02d' "$ep")] Encoding Title $title..."
+    if ! HandBrakeCLI -i "$dev" -t "$title" --angle 1 \
+        -e nvenc_h264 -q 20 -B 160 --comb-detect --decomb \
+        -o "$outpath" </dev/null; then
+        echo "Error: HandBrake failed on Title $title ($outfile)."
+        fails=$((fails + 1))
+    fi
+    ep=$((ep + 1))
+done <<< "$detected"
+
+if [ "$fails" -ne 0 ]; then
+    echo "Done, but $fails episode(s) failed. Re-run the same command to retry."
+    exit 1
+fi
+echo "Done! $total episodes saved to $season_dir/"
