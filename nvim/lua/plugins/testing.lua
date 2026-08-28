@@ -61,7 +61,17 @@ return {
                 timeout_ms = 30 * 5 *
                     1000 -- number of milliseconds to wait before timeout while communicating with adapter client
             }
+            -- neotest-vstest emits positions with type "parameterized" ([Theory] tests),
+            -- which neotest's status consumer doesn't define a sign for.
+            vim.fn.sign_define("neotest_parameterized", { text = "", texthl = "NeotestTest" })
+
             neotest.setup({
+                icons = {
+                    parameterized = "",
+                },
+                highlights = {
+                    parameterized = "NeotestTest",
+                },
                 adapters = {
                     require("neotest-vstest"),
                     require("neotest-go"),

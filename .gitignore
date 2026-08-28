@@ -17,3 +17,5 @@ emacs/transient/
 emacs/projects
 default.target.wants/
 timer.target.wants/
+bin/hypa
+bin/quarto
