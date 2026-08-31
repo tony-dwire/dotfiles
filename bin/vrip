@@ -2,16 +2,32 @@
 set -euo pipefail
 
 if [ -z "${1:-}" ]; then
-    echo "Error: Please provide a movie name. Example: vrip 'Finding Nemo'"
+    echo "Error: Please provide a movie name. Example: vrip 'Finding Nemo' 2003"
     exit 1
 fi
 
 movie_name="$1"
+year="${2:-}"
+
+# Jellyfin-friendly layout: 'Movie Name (Year)/Movie Name (Year).mp4'
+if [ -n "$year" ]; then
+    movie_dir="${movie_name} (${year})"
+    movie_file="${movie_dir}/${movie_dir}.mp4"
+else
+    movie_file="${movie_name}.mp4"
+fi
+
+# Audible notification: freedesktop event sound, terminal bell as fallback.
+ding() {
+    canberra-gtk-play -i "${1:-complete}" 2>/dev/null \
+        || printf '\a'
+}
 
 echo "Scanning disc layout..."
 title=$(lsdvd -x /dev/sr0 2>/dev/null | awk '/Longest track:/ {print $3}')
 
 if [ -z "${title:-}" ]; then
+    ding bell
     echo "Error: Could not read DVD track structure. Is a disc inserted?"
     exit 1
 fi
@@ -20,13 +36,16 @@ echo "Encoding main title (Track $title) directly from disc using Nvidia GPU..."
 # Read straight from the disc: libdvdnav follows the real playback path,
 # which sidesteps ARccOS-style protection (bogus sectors / fake angles)
 # that breaks full-disc mirroring with dvdbackup.
+[ -n "$year" ] && mkdir -p "$movie_dir"
 HandBrakeCLI -i /dev/sr0 -t "$title" --angle 1 \
     -e nvenc_h264 -q 20 -B 160 --comb-detect --decomb \
-    -o "${movie_name}.mp4"
+    -o "$movie_file"
 
 if [ $? -ne 0 ]; then
+    ding bell
     echo "Error: HandBrake failed."
     exit 1
 fi
 
-echo "Done! Saved to ${movie_name}.mp4"
+ding
+echo "Done! Saved to $movie_file"

@@ -34,6 +34,13 @@ set -l dev (set -q VRIP_DEV; and echo $VRIP_DEV; or echo /dev/sr0)
 set -l min_secs (set -q VRIP_EP_MIN_SECS; and echo $VRIP_EP_MIN_SECS; or echo 120)
 set -l tol_secs (set -q VRIP_EP_TOL_SECS; and echo $VRIP_EP_TOL_SECS; or echo 90)
 
+# Audible notification: freedesktop event sound, terminal bell as fallback.
+function ding
+    set -l sound (set -q argv[1]; and echo $argv[1]; or echo complete)
+    canberra-gtk-play -i "$sound" 2>/dev/null
+    or printf '\a'
+end
+
 echo "Scanning disc layout..."
 set -l detected (lsdvd -x $dev 2>/dev/null | awk -v min=$min_secs -v tol=$tol_secs '
     /^Title: / {
@@ -61,6 +68,7 @@ set -l detected (lsdvd -x $dev 2>/dev/null | awk -v min=$min_secs -v tol=$tol_se
     }' | sort -n)
 
 if test (count $detected) -eq 0
+    ding bell
     echo "Error: No episode-like titles found. Is the right disc inserted?"
     exit 1
 end
@@ -113,7 +121,9 @@ for line in $detected
 end
 
 if test $fails -ne 0
+    ding bell
     echo "Done, but $fails episode(s) failed. Re-run the same command to retry."
     exit 1
 end
+ding
 echo "Done! $total episodes saved to $season_dir/"

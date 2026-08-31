@@ -41,6 +41,12 @@ dev="${VRIP_DEV:-/dev/sr0}"
 min_secs="${VRIP_EP_MIN_SECS:-120}"
 tol_secs="${VRIP_EP_TOL_SECS:-90}"
 
+# Audible notification: freedesktop event sound, terminal bell as fallback.
+ding() {
+    canberra-gtk-play -i "${1:-complete}" 2>/dev/null \
+        || printf '\a'
+}
+
 echo "Scanning disc layout..."
 # Episode discs (like this Bluey one) carry: junk titles (FBI warnings, logos),
 # one giant "play all" title, and one title per episode. Episodes all run about
@@ -75,6 +81,7 @@ detected=$(lsdvd -x "$dev" 2>/dev/null | awk -v min="$min_secs" -v tol="$tol_sec
     }' | sort -n) || true
 
 if [ -z "${detected:-}" ]; then
+    ding bell
     echo "Error: No episode-like titles found. Is the right disc inserted?"
     exit 1
 fi
@@ -121,7 +128,9 @@ while read -r title secs; do
 done <<< "$detected"
 
 if [ "$fails" -ne 0 ]; then
+    ding bell
     echo "Done, but $fails episode(s) failed. Re-run the same command to retry."
     exit 1
 fi
+ding
 echo "Done! $total episodes saved to $season_dir/"
