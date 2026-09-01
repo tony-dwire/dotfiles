@@ -2,9 +2,14 @@
 # Rips TV episodes from the DVD in /dev/sr0 into a Jellyfin layout:
 #   Show Name/Season 01/Show Name S01E01.mp4
 #
-# Episode discs carry junk titles (warnings), one giant "play all" title, and
-# one title per episode. Episodes all run about the same length, so we keep
-# the densest cluster of similar-length titles and drop everything else.
+# Episode discs come in two layouts:
+#   1. junk titles (warnings), one giant "play all" title, and one title per
+#      episode (e.g. Bluey)
+#   2. one or more giant "play all" titles with each episode as a chapter
+#      (e.g. Sword Art Online), plus maybe a few standalone episode titles
+# Either way episodes run about the same length, so: pool every title length
+# and every long-enough chapter length, keep the densest cluster of similar
+# durations = the episode length, and emit one rip unit per episode.
 
 if test (count $argv) -lt 2
     echo "Usage: vrip-ep 'Show Name' <season> [first_episode] [-y]"
@@ -43,29 +48,50 @@ end
 
 echo "Scanning disc layout..."
 set -l detected (lsdvd -x $dev 2>/dev/null | awk -v min=$min_secs -v tol=$tol_secs '
-    /^Title: / {
-        tn = $2; gsub(/,/, "", tn)
+    $1 == "Title:" {
+        cur = $2 + 0
+        split($4, t, ":")
+        tsecs[cur] = t[1]*3600 + t[2]*60 + t[3]
+        nc[cur] = 0
+        if (cur > maxt) maxt = cur
+    }
+    $1 == "Chapter:" && cur {
         split($4, t, ":")
         secs = t[1]*3600 + t[2]*60 + t[3]
-        if (secs >= min) { n++; dur[n] = secs; ttl[n] = tn + 0 }
+        if (secs < min) next
+        nc[cur]++
+        cdur[cur, nc[cur]] = secs
+        cnum[cur, nc[cur]] = $2 + 0
     }
     END {
+        n = 0
+        for (ti = 1; ti <= maxt; ti++)
+            if (ti in tsecs && tsecs[ti] >= min) pool[++n] = tsecs[ti]
+        for (ti = 1; ti <= maxt; ti++)
+            for (ci = 1; ci <= nc[ti]; ci++) pool[++n] = cdur[ti, ci]
         for (i = 2; i <= n; i++) {
-            d = dur[i]; k = ttl[i]; j = i - 1
-            while (j >= 1 && dur[j] > d) { dur[j+1] = dur[j]; ttl[j+1] = ttl[j]; j-- }
-            dur[j+1] = d; ttl[j+1] = k
+            d = pool[i]; j = i - 1
+            while (j >= 1 && pool[j] > d) { pool[j+1] = pool[j]; j-- }
+            pool[j+1] = d
         }
         best = 0
         for (i = 1; i <= n; i++) {
             cnt = 0
-            for (j = i; j <= n && dur[j] - dur[i] <= tol; j++) cnt++
-            if (cnt > best) { best = cnt; med = dur[int((i + j - 1) / 2)] }
+            for (j = i; j <= n && pool[j] - pool[i] <= tol; j++) cnt++
+            if (cnt > best) { best = cnt; med = pool[int((i + j - 1) / 2)] }
         }
         if (best == 0) exit 1
-        for (i = 1; i <= n; i++)
-            if (dur[i] >= 0.6 * med && dur[i] <= 1.4 * med)
-                print ttl[i], dur[i]
-    }' | sort -n)
+        for (ti = 1; ti <= maxt; ti++) {
+            if (!(ti in tsecs) || tsecs[ti] < min) continue
+            if (tsecs[ti] >= 0.6 * med && tsecs[ti] <= 1.4 * med) {
+                print ti, 0, tsecs[ti]
+            } else {
+                for (ci = 1; ci <= nc[ti]; ci++)
+                    if (cdur[ti, ci] >= 0.6 * med && cdur[ti, ci] <= 1.4 * med)
+                        print ti, cnum[ti, ci], cdur[ti, ci]
+            }
+        }
+    }')
 
 if test (count $detected) -eq 0
     ding bell
@@ -82,7 +108,13 @@ set -l ep $first_ep
 for line in $detected
     set -l outfile (printf '%s S%02dE%02d.mp4' "$show_name" $season $ep)
     set -l parts (string split ' ' $line)
-    printf '  Title %2d (%4d min) -> %s/%s\n' $parts[1] (math "floor($parts[2] / 60)") "$season_dir" "$outfile"
+    if test $parts[2] = 0
+        set -l src (printf 'Title %d' $parts[1])
+        printf '  %-16s (%4d min) -> %s/%s\n' $src (math "floor($parts[3] / 60)") "$season_dir" "$outfile"
+    else
+        set -l src (printf 'Title %d ch %d' $parts[1] $parts[2])
+        printf '  %-16s (%4d min) -> %s/%s\n' $src (math "floor($parts[3] / 60)") "$season_dir" "$outfile"
+    end
     set ep (math $ep + 1)
 end
 
@@ -100,7 +132,9 @@ mkdir -p "$season_dir"
 set -l ep $first_ep
 set -l fails 0
 for line in $detected
-    set -l title (string split ' ' $line)[1]
+    set -l parts (string split ' ' $line)
+    set -l title $parts[1]
+    set -l chap $parts[2]
     set -l outfile (printf '%s S%02dE%02d.mp4' "$show_name" $season $ep)
     set -l outpath "$season_dir/$outfile"
 
@@ -110,12 +144,22 @@ for line in $detected
         continue
     end
 
-    echo "[$outfile] Encoding Title $title..."
-    if not HandBrakeCLI -i $dev -t $title --angle 1 \
-            -e nvenc_h264 -q 20 -B 160 --comb-detect --decomb \
-            -o "$outpath"
-        echo "Error: HandBrake failed on Title $title ($outfile)."
-        set fails (math $fails + 1)
+    if test $chap = 0
+        echo "[$outfile] Encoding Title $title..."
+        if not HandBrakeCLI -i $dev -t $title --angle 1 \
+                -e nvenc_h264 -q 20 -B 160 --comb-detect --decomb \
+                -o "$outpath"
+            echo "Error: HandBrake failed on Title $title ($outfile)."
+            set fails (math $fails + 1)
+        end
+    else
+        echo "[$outfile] Encoding Title $title, Chapter $chap..."
+        if not HandBrakeCLI -i $dev -t $title --angle 1 --chapters "$chap-$chap" \
+                -e nvenc_h264 -q 20 -B 160 --comb-detect --decomb \
+                -o "$outpath"
+            echo "Error: HandBrake failed on Title $title ch $chap ($outfile)."
+            set fails (math $fails + 1)
+        end
     end
     set ep (math $ep + 1)
 end
