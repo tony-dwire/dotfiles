@@ -4,6 +4,14 @@ Personal [pi](https://pi.dev) coding agent configuration, stowed into `~/.pi`.
 
 ## Install on a new machine
 
+Run the repo setup script:
+
+```bash
+cd ~/repos/dotfiles && ./setup.sh
+```
+
+Or stow this package alone:
+
 ```bash
 stow -d ~/repos/dotfiles -t ~ pi
 ```
