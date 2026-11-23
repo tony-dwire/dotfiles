@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# herdr-sessionizer - switch between herdr workspaces, or open a folder from ~/repos.
+# Mirrors bin/tmux-sessionizer: fuzzy-find a folder; reuse its workspace if one
+# is already open, otherwise create one, then focus it.
+#
+# Usage:
+#   herdr-sessionizer            interactive fzf picker (needs a TTY)
+#   herdr-sessionizer <dir>      open <dir> directly, no picker
+#
+# Tunables:
+#   HERDR_SESSIONIZER_REPOS   folder to browse for projects (default: ~/repos)
+set -euo pipefail
+
+repos="${HERDR_SESSIONIZER_REPOS:-$HOME/repos}"
+
+# Lists open workspaces as: ws <TAB> workspace_id <TAB> label
+open_workspaces() {
+    herdr workspace list \
+        | jq -r '.result.workspaces[] | ["ws", .workspace_id, .label] | @tsv'
+}
+
+# One entry per line: kind <TAB> target <TAB> display
+build_entries() {
+    local open_labels
+    open_labels=$(herdr workspace list | jq -r '.result.workspaces[].label')
+
+    open_workspaces
+
+    find "$repos" -mindepth 1 -maxdepth 1 -type d | sort | while read -r dir; do
+        name=$(basename "$dir")
+        # Skip folders that already have a workspace with a matching label.
+        if ! grep -qxF "$name" <<<"$open_labels"; then
+            printf 'dir\t%s\t%s\n' "$dir" "$name"
+        fi
+    done
+}
+
+if [[ $# -eq 1 ]]; then
+    kind=dir
+    target=$1
+else
+    selected=$(build_entries | fzf --delimiter '\t' --with-nth 3 \
+        --prompt 'herdr> ' \
+        --header $'kind\ttarget\tname' \
+        --header-first \
+        --preview 'if [ -d {2} ]; then ls --color=always {2}; fi' \
+        --preview-window right,40% \
+        --no-sort) || exit 0
+    kind=$(cut -f1 <<<"$selected")
+    target=$(cut -f2 <<<"$selected")
+fi
+
+case "$kind" in
+    ws)
+        herdr workspace focus "$target" >/dev/null
+        ;;
+    dir)
+        herdr workspace create --cwd "$target" --label "$(basename "$target")" --focus >/dev/null
+        ;;
+    *)
+        echo "herdr-sessionizer: unknown entry kind: $kind" >&2
+        exit 1
+        ;;
+esac
