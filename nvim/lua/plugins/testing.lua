@@ -7,7 +7,7 @@ return {
             "nvim-neotest/nvim-nio",
             "nvim-lua/plenary.nvim",
             "antoinemadec/FixCursorHold.nvim",
-            "Nsidorenco/neotest-vstest",
+            { "Nsidorenco/neotest-vstest", dir = vim.fn.expand("~/repos/neotest-vstest") },
             "nvim-neotest/neotest-go"
         },
         keys = {
@@ -79,7 +79,7 @@ return {
                 },
                 discovery = {
                     enabled = true,
-                    concurrent = 0
+                    --concurrent = 0
                 }
             })
         end,

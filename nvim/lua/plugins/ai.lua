@@ -1,5 +1,16 @@
 return {
     {
+        "pablopunk/pi.nvim",
+        keys = {
+            { "<leader>ai", ":PiAsk<CR>", desc = "Ask pi" },
+        },
+        opts = {
+            provider = "llama.cpp",
+            model = "llama.cpp/qwen3.8-flash-next-avalon",
+            thinking = "low"
+        }
+    },
+    {
         "nickjvandyke/opencode.nvim",
         version = "*", -- Latest stable release
         lazy = false,
