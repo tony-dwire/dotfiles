@@ -15,5 +15,11 @@
   },
   "approvals": {
     "policyHooks": true
-  }
+  },
+  "components": [
+    {
+      "id": "display-guidance",
+      "component": "display-guidance"
+    }
+  ]
 }
