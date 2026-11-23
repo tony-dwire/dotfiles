@@ -5,9 +5,12 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 const FABRIC_COMPONENT_REGISTER_EVENT = "pi-fabric:component:register:v1";
 const FABRIC_COMPONENT_DISCOVER_EVENT = "pi-fabric:component:discover:v1";
 
-// Rules apply to every model. Fabric matches "*" against the full
+// Guidance applies to every model. Fabric matches "*" against the full
 // "provider/model" name, and "*" also matches "/".
-const ALL_MODELS = ["strata/*", "llama.cpp/*"];
+const ALL_MODELS = ["*"];
+
+// The display-first check is enforced only on these local models.
+const LOCAL_MODELS = ["strata/*", "llama.cpp/*"];
 
 const GUIDANCE = `Every fabric_exec call MUST set display: { name, description }. The user reads these as the title of each step. Never skip them.
 
@@ -120,8 +123,22 @@ const BLOCK_REASON = (firstKey: string | undefined) =>
 export const checkDisplayFirst = (toolCallId: string, input: any): string | undefined => {
     const keys = rawArgumentKeys.get(toolCallId) ?? Object.keys(input ?? {});
     rawArgumentKeys.delete(toolCallId);
-    return undefined;
-    //return keys[0] === "display" ? undefined : BLOCK_REASON(keys[0]);
+    return keys[0] === "display" ? undefined : BLOCK_REASON(keys[0]);
+};
+
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// True when "provider/model" matches one of the LOCAL_MODELS globs.
+const globMatches = (pattern: string, name: string): boolean =>
+    new RegExp("^" + pattern.split("*").map(escapeRegExp).join("[\\s\\S]*") + "$").test(name);
+
+// True when the active model in ctx is one of the local models.
+// Fails open: an unknown model is not treated as local.
+const isLocalModel = (ctx: any): boolean => {
+    const model = ctx?.model;
+    if (!model) return false;
+    const name = `${model.provider}/${model.id}`;
+    return LOCAL_MODELS.some((pattern) => globMatches(pattern, name));
 };
 
 export default function extension(pi: ExtensionAPI) {
@@ -138,9 +155,14 @@ export default function extension(pi: ExtensionAPI) {
 
     pi.on("message_end", (event: any) => recordArgumentOrder(event.message));
 
-    // Reject any fabric_exec call unless display is the first argument.
-    pi.on("tool_call", (event: any) => {
+    // Reject a fabric_exec call on a local model unless display came first.
+    // On other models drop the recorded key order and let the call through.
+    pi.on("tool_call", (event: any, ctx: any) => {
         if (event.toolName !== "fabric_exec") return undefined;
+        if (!isLocalModel(ctx)) {
+            rawArgumentKeys.delete(event.toolCallId);
+            return undefined;
+        }
         const reason = checkDisplayFirst(event.toolCallId, event.input);
         return reason ? { block: true, reason } : undefined;
     });
