@@ -1,0 +1,226 @@
+{
+  "lastChangelogVersion": "1.6.0",
+  "defaultProvider": "llama.cpp",
+  "defaultModel": "qwen3.8-flash-next-avalon",
+  "defaultThinkingLevel": "medium",
+  "hideThinkingBlock": true,
+  "packages": [
+    {
+      "source": "npm:pi-web-access",
+      "extensions": [
+        "+index.ts",
+        "-dist/index.js"
+      ],
+      "skills": [
+        "+skills/librarian/SKILL.md"
+      ]
+    },
+    {
+      "source": "npm:pi-notify",
+      "extensions": [
+        "-index.ts"
+      ]
+    },
+    {
+      "source": "npm:@juicesharp/rpiv-todo",
+      "extensions": [
+        "-index.ts"
+      ]
+    },
+    {
+      "source": "npm:@tmustier/pi-usage-extension",
+      "extensions": [
+        "+index.ts"
+      ]
+    },
+    {
+      "source": "npm:pi-contextimate",
+      "extensions": [
+        "-extensions/pi-contextimate/index.ts",
+        "-extensions/pi-traceline/index.ts"
+      ]
+    },
+    {
+      "source": "npm:@juicesharp/rpiv-ask-user-question",
+      "extensions": [
+        "+index.ts"
+      ]
+    },
+    {
+      "source": "npm:@zigai/pi-status-bar",
+      "extensions": [
+        "-src/index.ts"
+      ]
+    },
+    {
+      "source": "npm:@tintinweb/pi-tasks",
+      "extensions": [
+        "+src/index.ts"
+      ]
+    },
+    {
+      "source": "npm:@tintinweb/pi-subagents",
+      "extensions": [
+        "-src/index.ts"
+      ]
+    },
+    {
+      "source": "npm:@zhcsyncer/pi-glance",
+      "extensions": [
+        "-index.ts"
+      ]
+    },
+    {
+      "source": "npm:@monotykamary/pi-tps",
+      "extensions": [
+        "+extensions/pi-tps/index.ts"
+      ]
+    },
+    {
+      "source": "npm:pi-tps-was-taken",
+      "extensions": [
+        "+extensions/index.ts"
+      ]
+    },
+    {
+      "source": "npm:pi-fabric",
+      "extensions": [
+        "+dist/index.js",
+        "-node_modules/pi-coralbricks-provider/index.ts",
+        "+dist/extension-bootstrap.js"
+      ]
+    },
+    "npm:pi-footer",
+    {
+      "source": "npm:@pi-archimedes/session-name",
+      "extensions": [
+        "-src/index.ts"
+      ]
+    },
+    {
+      "source": "npm:pi-goal-x",
+      "extensions": [
+        "-extensions/goal.ts"
+      ]
+    },
+    "npm:@sting8k/pi-vcc"
+  ],
+  "smsNotification": {
+    "enabled": false,
+    "phoneNumber": "+1234567890",
+    "provider": "textbelt",
+    "apiKey": "your-textbelt-key",
+    "twilioSid": "",
+    "twilioToken": "",
+    "twilioFrom": ""
+  },
+  "quietStartup": false,
+  "theme": "light/dark",
+  "skills": [
+    "-skills/skills/productivity/caveman/SKILL.md",
+    "-skills/skills/personal/edit-article/SKILL.md",
+    "-skills/skills/misc/git-guardrails-claude-code/SKILL.md",
+    "-skills/skills/misc/migrate-to-shoehorn/SKILL.md",
+    "-skills/skills/personal/obsidian-vault/SKILL.md",
+    "-skills/skills/engineering/prototype/SKILL.md",
+    "-skills/skills/deprecated/qa/SKILL.md",
+    "-skills/skills/misc/scaffold-exercises/SKILL.md",
+    "-skills/skills/engineering/setup-matt-pocock-skills/SKILL.md",
+    "-skills/skills/misc/setup-pre-commit/SKILL.md",
+    "-skills/skills/engineering/triage/SKILL.md",
+    "-skills/skills/in-progress/writing-beats/SKILL.md",
+    "-skills/skills/in-progress/writing-fragments/SKILL.md",
+    "-skills/skills/in-progress/writing-shape/SKILL.md",
+    "-skills/skills/engineering/zoom-out/SKILL.md",
+    "+skills/skills/productivity/grill-me/SKILL.md",
+    "+skills/skills/engineering/grill-with-docs/SKILL.md",
+    "+skills/skills/in-progress/handoff/SKILL.md",
+    "+skills/skills/engineering/tdd/SKILL.md",
+    "-skills/skills/productivity/write-a-skill/SKILL.md",
+    "+skills/skills/engineering/diagnose/SKILL.md",
+    "-skills/skills/engineering/ask-matt/SKILL.md",
+    "-skills/skills/in-progress/decision-mapping/SKILL.md",
+    "-skills/skills/engineering/domain-modeling/SKILL.md",
+    "-skills/skills/engineering/implement/SKILL.md",
+    "-skills/skills/in-progress/review/SKILL.md",
+    "-skills/skills/deprecated/ubiquitous-language/SKILL.md",
+    "-skills/skills/productivity/writing-great-skills/SKILL.md",
+    "+skills/skills/productivity/teach/SKILL.md",
+    "+skills/skills/engineering/to-issues/SKILL.md",
+    "+skills/skills/engineering/to-prd/SKILL.md",
+    "+skills/skills/productivity/grilling/SKILL.md",
+    "-skills/skills/engineering/diagnosing-bugs/SKILL.md",
+    "+skills/skills/engineering/codebase-design/SKILL.md",
+    "+skills/skills/deprecated/design-an-interface/SKILL.md",
+    "+skills/skills/deprecated/request-refactor-plan/SKILL.md",
+    "+skills/skills/engineering/improve-codebase-architecture/SKILL.md",
+    "+skills/skills/engineering/resolving-merge-conflicts/SKILL.md",
+    "-skills/ask-matt/SKILL.md",
+    "-skills/claude-handoff/SKILL.md",
+    "-skills/git-guardrails-claude-code/SKILL.md",
+    "-skills/scaffold-exercises/SKILL.md",
+    "-skills/setup-matt-pocock-skills/SKILL.md",
+    "-skills/setup-pre-commit/SKILL.md",
+    "-skills/setup-ts-deep-modules/SKILL.md",
+    "+skills/grill-me/SKILL.md",
+    "+skills/grill-with-docs/SKILL.md",
+    "+skills/grilling/SKILL.md",
+    "+skills/tdd/SKILL.md",
+    "+skills/writing-for-agents/SKILL.md",
+    "+skills/resolving-merge-conflicts/SKILL.md",
+    "+skills/improve-codebase-architecture/SKILL.md",
+    "+skills/code-review/SKILL.md",
+    "+skills/research/SKILL.md",
+    "+skills/codebase-design/SKILL.md",
+    "+skills/domain-modeling/SKILL.md",
+    "+skills/handoff/SKILL.md",
+    "+skills/wait-what/SKILL.md",
+    "+skills/pr-review/SKILL.md",
+    "+skills/diagnosing-bugs/SKILL.md",
+    "+skills/implement/SKILL.md",
+    "+skills/loop-me/SKILL.md",
+    "+skills/migrate-to-shoehorn/SKILL.md",
+    "+skills/prototype/SKILL.md",
+    "+skills/teach/SKILL.md",
+    "+skills/to-questionnaire/SKILL.md",
+    "+skills/to-spec/SKILL.md",
+    "+skills/to-tickets/SKILL.md",
+    "+skills/triage/SKILL.md",
+    "+skills/wayfinder/SKILL.md",
+    "+skills/wizard/SKILL.md",
+    "+skills/writing-beats/SKILL.md",
+    "+skills/writing-fragments/SKILL.md",
+    "+skills/writing-shape/SKILL.md",
+    "-skills/pr/SKILL.md",
+    "+skills/pr-create/SKILL.md"
+  ],
+  "enabledModels": [
+    "github-copilot/claude-opus-5.5",
+    "github-copilot/gpt-6.1-sol",
+    "github-copilot/claude-sonnet-5.5",
+    "github-copilot/gpt-6-luna",
+    "llama.cpp/qwen3.8-flash-next-avalon",
+    "github-copilot/gemini-4-neon",
+    "github-copilot/gemini-4-hydrogen",
+    "github-copilot/gemini-4-carbon"
+  ],
+  "extensions": [
+    "-extensions/entry-timestamps.ts",
+    "-extensions/thinking-meter.ts",
+    "-extensions/context-meter.ts",
+    "-builtin:mcp",
+    "+extensions/herdr-agent-state.ts"
+  ],
+  "tuiMode": "fullscreen",
+  "compaction": {
+    "enabled": true
+  },
+  "fullscreenScrollbar": "auto",
+  "extensionChangelogVersions": {
+    "{\"source\":\"npm:pi-web-access\",\"scope\":\"user\"}": "0.47.0",
+    "{\"source\":\"npm:@tmustier/pi-usage-extension\",\"scope\":\"user\"}": "0.10.2",
+    "{\"source\":\"npm:@tintinweb/pi-tasks\",\"scope\":\"user\"}": "0.9.1",
+    "{\"source\":\"npm:pi-footer\",\"scope\":\"user\"}": "0.5.1",
+    "{\"source\":\"npm:@sting8k/pi-vcc\",\"scope\":\"user\"}": "0.12.0"
+  }
+}

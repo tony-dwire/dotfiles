@@ -1,0 +1,26 @@
+{
+  "$schema": "./schemas/pi-status-bar.schema.json",
+  "statusBar": {
+    "active": {
+      "timer": {
+        "visible": true,
+        "paused": false
+      }
+    },
+    "idle": {
+      "visible": true,
+      "showLastRunSummary": true,
+      "showTokensPerSecond": true
+    }
+  },
+  "rightMessages": {
+    "enabled": false,
+    "intervalMs": 10000,
+    "minGap": 4,
+    "minScrollCycles": 1,
+    "scrollColumnIntervalMs": 120,
+    "dimmed": true,
+    "italic": true,
+    "messages": []
+  }
+}

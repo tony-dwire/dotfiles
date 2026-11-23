@@ -1,0 +1,19 @@
+{
+  "configVersion": 4,
+  "agents": {
+    "maxConcurrent": 1,
+    "thinking": "medium",
+    "maxDepth": 1,
+    "enabled": false
+  },
+  "schema": {
+    "mode": "off"
+  },
+  "mesh": {
+    "enabled": true,
+    "actorScope": "project"
+  },
+  "approvals": {
+    "policyHooks": true
+  }
+}

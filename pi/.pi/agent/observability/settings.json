@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "preset": "verbose",
+  "segments": {
+    "modelThink": true,
+    "runtime": true,
+    "pwd": true,
+    "git": true,
+    "contextUsage": true,
+    "contextProgress": true,
+    "contextPercentage": true,
+    "contextNumbers": true,
+    "tokens": true,
+    "tps": true,
+    "cost": true
+  },
+  "contextZones": {
+    "expert": 70,
+    "warning": 85
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "activePack": "peon",
+  "muted": false,
+  "volume": 0.5,
+  "enabledCategories": {
+    "session.start": true,
+    "task.acknowledge": true,
+    "task.complete": true,
+    "task.error": true,
+    "input.required": true,
+    "resource.limit": true,
+    "user.spam": true,
+    "session.end": true,
+    "task.progress": true
+  }
+}

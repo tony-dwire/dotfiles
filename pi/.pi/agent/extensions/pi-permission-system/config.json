@@ -1,0 +1,28 @@
+{
+    "permission": {
+        "*": "allow",
+        "external_directory": {
+            "*": "ask",
+            "python3 *": "deny",
+            "python *": "deny",
+            "/tmp/*": "allow",
+            "~/.pi/*": "allow"
+        },
+        "path": {
+            "*": "allow",
+            ".env": "deny",
+            ".env.*": "deny",
+            "*.env.example": "allow"
+        },
+        "bash": {
+            "*": "allow",
+            "rm -rf *": "deny",
+            "sudo *": "deny",
+            "/tmp/*": "allow"
+        },
+        "write": {
+            "*": "allow",
+            ".lock": "deny"
+        }
+    }
+}
