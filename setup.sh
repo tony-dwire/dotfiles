@@ -24,7 +24,9 @@ run() { if [ "$DRY" = 1 ]; then echo "dry-run: $*"; else "$@"; fi }
 # Top-level entries we do not link: the repo's own files, and packages
 # handled another way (pi uses stow; systemd units are copied by hand).
 # The dot- variant holds the stow tree for pi; do not link it either.
-SKIP="pi .pi systemd README.md setup.sh"
+# herdr mixes its config with runtime state in ~/.config/herdr, so only
+# its config.toml is linked (see link_file below).
+SKIP="pi .pi systemd README.md setup.sh herdr"
 
 link_top_level() {
   local name="$1"
@@ -49,12 +51,34 @@ link_top_level() {
 
 mkdir -p "$HOME/.config"
 
+# Per-file links for apps whose config folder also holds runtime state.
+link_file() {
+  local src="$REPO/$1" link="$2" want
+  want="$(realpath -m --relative-to="$(dirname "$link")" "$src")"
+
+  if [ -L "$link" ]; then
+    if [ "$(readlink "$link")" = "$want" ]; then
+      echo "ok      $1"
+    else
+      echo "CONFLICT $1: link points to $(readlink "$link"), fix by hand"
+    fi
+  elif [ -e "$link" ]; then
+    echo "CONFLICT $1: real file exists, not touching it"
+  else
+    echo "link    $1"
+    run mkdir -p "$(dirname "$link")"
+    run ln -s "$want" "$link"
+  fi
+}
+
 for entry in "$REPO"/* "$REPO"/.[!.]*; do
   name="$(basename "$entry")"
   case "$name" in .git|.gitignore|.gitmodules) continue ;; esac
   case " $SKIP " in *" $name "*) continue ;; esac
   link_top_level "$name"
 done
+
+link_file herdr/config.toml "$HOME/.config/herdr/config.toml"
 
 echo
 echo "stow: pi -> $HOME"
