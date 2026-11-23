@@ -19,3 +19,5 @@ default.target.wants/
 timer.target.wants/
 bin/hypa
 bin/quarto
+bin/herdr
+.pi/
