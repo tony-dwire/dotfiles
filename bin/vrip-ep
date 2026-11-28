@@ -2,9 +2,9 @@
 set -euo pipefail
 
 usage() {
-    echo "Usage: vrip-ep 'Show Name' <season> [first_episode] [-y]"
+    echo "Usage: vrip-ep 'Show Name' <season> [first_episode] [-y] [-s MODE] [-d MODE]"
     echo ""
-    echo "Rips TV episodes from the DVD in /dev/sr0 into a Jellyfin layout:"
+    echo "Rips TV episodes from the DVD or Blu-ray in /dev/sr0 into a Jellyfin layout:"
     echo "  Show Name/Season 01/Show Name S01E01.mp4"
     echo ""
     echo "first_episode lets you continue a multi-disc set:"
@@ -12,7 +12,24 @@ usage() {
     echo "  vrip-ep 'Bluey' 1 27     # disk 2: episodes 27-52"
     echo ""
     echo "Options:"
-    echo "  -y, --yes    Don't ask for confirmation before encoding"
+    echo "  -y, --yes          Don't ask for confirmation before encoding"
+    echo "  -s, --subs [MODE]  Include subtitles (DVD VobSub / Blu-ray PGS tracks). MODE is one of:"
+    echo "                       burn   burn the first subtitle track into the video"
+    echo "                              (default when MODE is omitted)"
+    echo "                       all    keep every subtitle track in the output
+                              (this forces MKV output: neither Blu-ray PGS
+                              nor DVD VobSub fits in mp4)"
+    echo "                       <lang> a 2-letter language code (e.g. en, de);"
+    echo "                              restricts to that language, and burns it"
+    echo "                              (add 'all' after the code to keep all"
+    echo "                              matching tracks instead, e.g. -s en all)"
+    echo "  -d, --deint MODE   Filter for interlacing/pulldown. MODE is one of:"
+    echo "                       decomb (default) comb-detect + decomb; right for"
+    echo "                              genuinely interlaced sources (PAL discs)"
+    echo "                       detel  detelecine + decomb; right for NTSC film/"
+    echo "                              anime (23.976fps with 3:2 pulldown)"
+    echo "                       yadif  plain deinterlace"
+    echo "                       off    no filtering"
     echo ""
     echo "Environment overrides:"
     echo "  VRIP_DEV=/dev/sr0        device to read from"
@@ -28,14 +45,57 @@ show_name="$1"; shift
 season="$1"; shift
 first_ep=1
 auto_yes=0
+subs_mode=""
+subs_lang=""
+deint=decomb
 while [ $# -gt 0 ]; do
     case "$1" in
         -y|--yes) auto_yes=1 ;;
+        -d|--deint)
+            deint="${2:-}"
+            case "$deint" in
+                decomb|detel|yadif|off) ;;
+                detelecine) deint=detel ;;
+                *) echo "Error: --deint must be decomb, detel, yadif, or off." >&2; exit 1 ;;
+            esac
+            shift
+            ;;
+        -s|--subs)
+            arg="${2:-}"
+            case "$arg" in
+                ""|-*) subs_mode=burn ;;
+                burn) subs_mode=burn ;;
+                all) subs_mode=all ;;
+                *) subs_lang="$arg"
+                   if [ "${3:-}" = "all" ]; then
+                       subs_mode=all; shift
+                   else
+                       subs_mode=burn
+                   fi ;;
+            esac
+            [[ "$arg" == -* || -z "$arg" ]] || shift
+            ;;
         -h|--help) usage ;;
         *) first_ep="$1" ;;
     esac
     shift
 done
+
+subargs=()
+if [ -n "$subs_lang" ]; then
+    subargs+=(--subtitle-lang-list "$subs_lang")
+fi
+case "$subs_mode" in
+    burn) subargs+=(--subtitle-burned) ;;
+    all)  subargs+=(--all-subtitles) ;;
+esac
+
+case "$deint" in
+    decomb) deintargs=(--comb-detect --decomb) ;;
+    detel)  deintargs=(--detelecine --comb-detect --decomb) ;;
+    yadif)  deintargs=(--deinterlace yadif) ;;
+    off)    deintargs=() ;;
+esac
 
 dev="${VRIP_DEV:-/dev/sr0}"
 min_secs="${VRIP_EP_MIN_SECS:-120}"
@@ -47,18 +107,8 @@ ding() {
         || printf '\a'
 }
 
-echo "Scanning disc layout..."
-# Episode discs come in two layouts:
-#   1. junk titles (FBI warnings, logos), one giant "play all" title, and one
-#      title per episode (e.g. Bluey)
-#   2. one or more giant "play all" titles with each episode as a chapter
-#      (e.g. Sword Art Online), plus maybe a few standalone episode titles
-# Either way the episodes run about the same length, so: pool every title
-# length and every long-enough chapter length, find the densest cluster of
-# similar durations = the episode length, then emit one rip unit per episode:
-#   "<title> 0 <secs>"           standalone episode title
-#   "<title> <chapter> <secs>"   a chapter of a play-all title
-detected=$(lsdvd -x "$dev" 2>/dev/null | awk -v min="$min_secs" -v tol="$tol_secs" '
+cluster() {
+    awk -v min="$min_secs" -v tol="$tol_secs" '
     $1 == "Title:" {
         cur = $2 + 0
         split($4, t, ":")
@@ -108,7 +158,59 @@ detected=$(lsdvd -x "$dev" 2>/dev/null | awk -v min="$min_secs" -v tol="$tol_sec
                         print ti, cnum[ti, ci], cdur[ti, ci]
             }
         }
-    }') || true
+    }
+'
+}
+
+echo "Scanning disc layout..."
+# Episode discs come in two layouts:
+#   1. junk titles (FBI warnings, logos), one giant "play all" title, and one
+#      title per episode (e.g. Bluey)
+#   2. one or more giant "play all" titles with each episode as a chapter
+#      (e.g. Sword Art Online), plus maybe a few standalone episode titles
+# Either way the episodes run about the same length, so: pool every title
+# length and every long-enough chapter length, find the densest cluster of
+# similar durations = the episode length, then emit one rip unit per episode:
+#   "<title> 0 <secs>"           standalone episode title
+#   "<title> <chapter> <secs>"   a chapter of a play-all title
+# The clustering logic is media-agnostic; only the scan source differs.
+# DVDs: lsdvd. Blu-rays: lsdvd can't read those, so use HandBrake's JSON
+# title scan and re-emit the same "Title:/Chapter:" lines lsdvd produces.
+scan_text=$(lsdvd -x "$dev" 2>/dev/null || true)
+disc=dvd
+if [ -z "$scan_text" ]; then
+    echo "No DVD structure found; probing for a Blu-ray..."
+    bd_json=$(HandBrakeCLI -i "$dev" -t 0 --scan --json </dev/null 2>/dev/null || true)
+    scan_text=$(BD_JSON="$bd_json" python3 <<'PY'
+import os, sys, json
+raw = os.environ.get("BD_JSON") or ""
+i = raw.find("{")
+if i < 0:
+    sys.exit(1)
+try:
+    doc = json.loads(raw[i:])
+except Exception:
+    sys.exit(1)
+titles = (doc.get("JSONTitleSet") or {}).get("TitleList") or []
+if not titles:
+    sys.exit(1)
+for t in titles:
+    print("Title: %s, Duration: %s," % (t.get("Index"), t.get("Duration")))
+    for ch in t.get("ChapterList") or []:
+        print("Chapter: %s, Duration: %s," % (ch.get("ChapterNumber"), ch.get("Duration")))
+PY
+) || true
+    if [ -n "$scan_text" ]; then disc=bd; fi
+fi
+
+if [ -z "$scan_text" ]; then
+    ding bell
+    echo "Error: Could not read the disc as a DVD or Blu-ray. Is the right disc inserted?"
+    echo "If this is an encrypted Blu-ray, you need a KEYDB.cfg for libaacs (or MakeMKV)."
+    exit 1
+fi
+
+detected=$(cluster <<< "$scan_text") || true
 
 if [ -z "${detected:-}" ]; then
     ding bell
@@ -116,14 +218,30 @@ if [ -z "${detected:-}" ]; then
     exit 1
 fi
 
+# PGS subtitles (Blu-ray) cannot be muxed into mp4; fall back to mkv.
+# HandBrake rejects VobSub (DVD) and PGS (Blu-ray) in mp4, so keeping the
+# tracks as-is needs Matroska whichever media the episodes came from.
+container=mp4
+if [ "$subs_mode" = all ]; then
+    container=mkv
+fi
+
 season_padded=$(printf '%02d' "$season")
 season_dir="${show_name}/Season ${season_padded}"
 total=$(wc -l <<< "$detected")
 
 echo "Detected $total episodes:"
+case "$subs_mode" in
+    burn) echo "Subtitles: burning${subs_lang:+ $subs_lang} first subtitle track into video" ;;
+    all)  if [ "$disc" = bd ]; then
+              echo "Subtitles: keeping all tracks${subs_lang:+ ($subs_lang)} as PGS in .mkv"
+          else
+              echo "Subtitles: keeping all tracks${subs_lang:+ ($subs_lang)} as VobSub in .mkv"
+          fi ;;
+esac
 ep=$first_ep
 while read -r title chap secs; do
-    outfile=$(printf '%s S%02dE%02d.mp4' "$show_name" "$season" "$ep")
+    outfile=$(printf '%s S%02dE%02d.%s' "$show_name" "$season" "$ep" "$container")
     if [ "$chap" = "0" ]; then src=$(printf 'Title %d' "$title")
     else src=$(printf 'Title %d ch %d' "$title" "$chap"); fi
     printf '  %-16s (%4d min) -> %s/%s\n' "$src" "$(( ${secs%.*} / 60 ))" "$season_dir" "$outfile"
@@ -143,7 +261,7 @@ mkdir -p "$season_dir"
 ep=$first_ep
 fails=0
 while read -r title chap secs; do
-    outfile=$(printf '%s S%02dE%02d.mp4' "$show_name" "$season" "$ep")
+    outfile=$(printf '%s S%02dE%02d.%s' "$show_name" "$season" "$ep" "$container")
     outpath="${season_dir}/${outfile}"
     if [ -s "$outpath" ]; then
         echo "[S${season_padded}E$(printf '%02d' "$ep")] exists, skipping."
@@ -157,8 +275,8 @@ while read -r title chap secs; do
         echo "[S${season_padded}E$(printf '%02d' "$ep")] Encoding Title $title, Chapter $chap..."
     fi
     if ! HandBrakeCLI -i "$dev" -t "$title" --angle 1 "${chapargs[@]}" \
-        -e nvenc_h264 -q 20 -B 160 --comb-detect --decomb \
-        -o "$outpath" </dev/null; then
+        -e nvenc_h264 -q 20 -B 160 "${deintargs[@]}" \
+        "${subargs[@]}" -o "$outpath" </dev/null; then
         echo "Error: HandBrake failed on Title $title ch $chap ($outfile)."
         fails=$((fails + 1))
     fi
